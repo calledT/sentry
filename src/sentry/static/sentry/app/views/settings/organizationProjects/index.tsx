@@ -1,7 +1,9 @@
-import PropTypes from 'prop-types';
 import React from 'react';
+import {Location} from 'history';
+import {RouteComponentProps} from 'react-router/lib/Router';
 import styled from '@emotion/styled';
 
+import {Organization, Project} from 'app/types';
 import {sortProjects} from 'app/utils';
 import {t} from 'app/locale';
 import AsyncView from 'app/views/asyncView';
@@ -12,43 +14,42 @@ import Pagination from 'app/components/pagination';
 import {Panel, PanelBody, PanelHeader, PanelItem} from 'app/components/panels';
 import Placeholder from 'app/components/placeholder';
 import ProjectListItem from 'app/views/settings/components/settingsProjectItem';
-import SentryTypes from 'app/sentryTypes';
 import SettingsPageHeader from 'app/views/settings/components/settingsPageHeader';
 import routeTitleGen from 'app/utils/routeTitle';
 import space from 'app/styles/space';
 import withOrganization from 'app/utils/withOrganization';
 import {IconAdd} from 'app/icons';
+import {decodeScalar} from 'app/utils/queryString';
 
 import ProjectStatsGraph from './projectStatsGraph';
 
 const ITEMS_PER_PAGE = 50;
 
-class OrganizationProjects extends AsyncView {
-  static propTypes = {
-    organization: SentryTypes.Organization,
-  };
+type Props = {
+  organization: Organization;
+  location: Location;
+} & RouteComponentProps<{orgId: string}, {}>;
 
-  static contextTypes = {
-    router: PropTypes.object.isRequired,
-  };
+type ProjectStats = Record<string, Required<Project['stats']>>;
 
-  UNSAFE_componentWillReceiveProps(nextProps, nextContext) {
-    super.UNSAFE_componentWillReceiveProps(nextProps, nextContext);
-    const searchQuery = nextProps.location.query.query;
-    if (searchQuery !== this.props.location.query.query) {
-      this.setState({searchQuery});
-    }
-  }
+type State = AsyncView['state'] & {
+  projectList: Project[] | null;
+  projectListPageLinks: string | null;
+  projectStats: ProjectStats | null;
+};
 
-  getEndpoints() {
+class OrganizationProjects extends AsyncView<Props, State> {
+  getEndpoints(): ReturnType<AsyncView['getEndpoints']> {
     const {orgId} = this.props.params;
+    const {location} = this.props;
+    const query = decodeScalar(location.query.query);
     return [
       [
         'projectList',
         `/organizations/${orgId}/projects/`,
         {
           query: {
-            query: this.props.location.query.query,
+            query,
             per_page: ITEMS_PER_PAGE,
           },
         },
@@ -68,23 +69,16 @@ class OrganizationProjects extends AsyncView {
     ];
   }
 
-  getDefaultState() {
-    return {
-      ...super.getDefaultState(),
-      searchQuery: this.props.location.query.query || '',
-    };
-  }
-
-  getTitle() {
+  getTitle(): string {
     const {organization} = this.props;
     return routeTitleGen(t('Projects'), organization.slug, false);
   }
 
-  renderLoading() {
+  renderLoading(): React.ReactNode {
     return this.renderBody();
   }
 
-  renderBody() {
+  renderBody(): React.ReactNode {
     const {projectList, projectListPageLinks, projectStats} = this.state;
     const {organization} = this.props;
     const canCreateProjects = new Set(organization.access).has('project:admin');
@@ -107,7 +101,7 @@ class OrganizationProjects extends AsyncView {
     );
 
     return (
-      <div>
+      <React.Fragment>
         <SettingsPageHeader title="Projects" action={action} />
         <Panel>
           <PanelHeader hasButtons>
@@ -119,7 +113,7 @@ class OrganizationProjects extends AsyncView {
               className: 'search',
             })}
           </PanelHeader>
-          <PanelBody css={{width: '100%'}}>
+          <PanelBody>
             {projectList ? (
               sortProjects(projectList).map(project => (
                 <GridPanelItem key={project.id}>
@@ -150,7 +144,7 @@ class OrganizationProjects extends AsyncView {
         {projectListPageLinks && (
           <Pagination pageLinks={projectListPageLinks} {...this.props} />
         )}
-      </div>
+      </React.Fragment>
     );
   }
 }
